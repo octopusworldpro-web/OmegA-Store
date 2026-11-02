@@ -1,0 +1,15 @@
+{
+  "name": "omegastore",
+  "version": "2.0.0",
+  "author": "NirZon",
+  "description": "OmegA Store API compatible with GoatStore self-update, upload, search and install routes",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "mongodb": "^6.0.0"
+  }
+}
