@@ -5,9 +5,6 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
-// Override these on the hosting service when targeting another database/collection.
-const STORE_DB_NAME = String(process.env.STORE_DB_NAME || "omegastore").trim();
-const STORE_COMMANDS_COLLECTION = String(process.env.STORE_COMMANDS_COLLECTION || "commands").trim();
 const ADMIN_UID = String(process.env.STORE_ADMIN_UID || "").trim();
 const ADMIN_SECRET = String(process.env.STORE_ADMIN_SECRET || "").trim();
 
@@ -20,8 +17,8 @@ const clean = value => String(value == null ? "" : value).trim();
 const norm = value => clean(value).toLowerCase();
 const publicCommand = doc => {
   if (!doc) return null;
-  const { _id, ...rest } = doc;
-  return { ...rest, id: String(_id) };
+  // Keep _id for the original website detail lookup; also expose a string id.
+  return { ...doc, id: String(doc._id) };
 };
 function parseVersion(value) {
   const raw = clean(value).replace(/^v/i, "");
@@ -134,15 +131,11 @@ async function startServer() {
   if (!MONGODB_URI) throw new Error("MONGODB_URI environment variable is missing");
   const client = new MongoClient(MONGODB_URI);
   await client.connect();
-  const db = client.db(STORE_DB_NAME);
-  commands = db.collection(STORE_COMMANDS_COLLECTION);
+  const db = client.db("omegastore");
+  commands = db.collection("commands");
   settings = db.collection("settings");
-  // Backfill normalized keys for legacy records (missing, null, or blank values).
-  // This is important before migrating data into a collection with a unique compound index.
-  const legacy = await commands.find({ $or: [
-    { nameNorm: { $exists: false } }, { nameNorm: null }, { nameNorm: "" },
-    { authorNorm: { $exists: false } }, { authorNorm: null }, { authorNorm: "" }
-  ] }).toArray();
+  // Backfill normalized keys for records created by the legacy /api/commands endpoint.
+  const legacy = await commands.find({ $or: [{ nameNorm: { $exists: false } }, { authorNorm: { $exists: false } }] }).toArray();
   for (const doc of legacy) {
     await commands.updateOne({ _id: doc._id }, { $set: {
       nameNorm: norm(doc.name), authorNorm: norm(doc.author),
@@ -172,12 +165,42 @@ async function startServer() {
   });
   app.get("/api/commands", async (req, res) => {
     try {
-      const f = {};
-      if (req.query.name) f.nameNorm = { $regex: norm(req.query.name).replace(/[.*+?^${}()|[\]\\]/g, "\\$&") };
-      if (req.query.author) f.authorNorm = norm(req.query.author);
-      const docs = await commands.find(f, { projection: { rawCode: 0 } }).sort({ createdAt: -1 }).limit(Math.min(Math.max(Number(req.query.limit) || 10, 1), 50)).toArray();
-      res.json({ success: true, count: docs.length, commands: docs.map(publicCommand) });
-    } catch (e) { res.status(500).json({ error: "Search failed" }); }
+      const filter = {};
+      const term = clean(req.query.name || req.query.q || req.query.search);
+      if (term) {
+        const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        const rx = new RegExp(escaped, "i");
+        filter.$or = [
+          { name: rx }, { nameNorm: norm(term) },
+          { author: rx }, { authorNorm: norm(term) },
+          { aliases: rx }
+        ];
+      }
+      if (req.query.author && !term) {
+        const escapedAuthor = clean(req.query.author).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+        filter.$or = [
+          { author: new RegExp(escapedAuthor, "i") },
+          { authorNorm: norm(req.query.author) }
+        ];
+      }
+      if (req.query.framework) filter.framework = clean(req.query.framework);
+      if (req.query.kind) filter.kind = clean(req.query.kind);
+
+      const limit = Math.min(Math.max(Number(req.query.limit) || 10, 1), 100);
+      const offset = Math.max(Number(req.query.offset) || 0, 0);
+      const results = await commands.find(filter, { projection: { rawCode: 0 } })
+        .sort({ createdAt: -1, uploadDate: -1 })
+        .skip(offset).limit(limit).toArray();
+
+      res.json({
+        success: true,
+        count: results.length,
+        commands: results.map(publicCommand)
+      });
+    } catch (error) {
+      console.error("Search error:", error.message);
+      res.status(500).json({ error: "Search failed" });
+    }
   });
   app.get("/api/commands/:id", async (req, res) => {
     const doc = await findById(req.params.id);
@@ -204,7 +227,7 @@ async function startServer() {
       let cursor = commands.find(f);
       if (q) {
         const rx = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-        cursor = commands.find({ ...f, $or: [{ name: rx }, { aliases: rx }] });
+        cursor = commands.find({ ...f, $or: [{ name: rx }, { nameNorm: norm(q) }, { author: rx }, { authorNorm: norm(q) }, { aliases: rx }] });
       }
       const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
       const offset = Math.max(Number(req.query.offset) || 0, 0);
