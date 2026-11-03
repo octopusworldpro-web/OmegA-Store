@@ -23,7 +23,7 @@ if (!MONGO_URI || !OWNER_UID) {
 
 // ---------------- DATABASE ----------------
 
-mongoose.connect(MONGO_URI)
+mongoose.connect(MONGO_URI, { dbName: "OmegAstore" })
   .then(() => console.log("[OmegA Store] MongoDB connected"))
   .catch(err => {
     console.error("[OmegA Store] MongoDB error:", err.message);
