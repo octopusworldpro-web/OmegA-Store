@@ -1,11 +1,10 @@
-
 {
   "name": "omega-goatstore",
   "version": "1.0.0",
   "description": "OmegA Public GoatStore API",
-  "main": "Goatstore-server.js",
+  "main": "OmegAstore-server.js",
   "scripts": {
-    "start": "node Goatstore-server.js"
+    "start": "node OmegAstore-server.js"
   },
   "dependencies": {
     "axios": "^1.7.9",
