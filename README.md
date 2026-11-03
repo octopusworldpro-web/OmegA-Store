@@ -1,4 +1,4 @@
-# OmegA Store API by NirZon
+# OmegA Store API
 
 OmegA Store API for the GoatStore module.
 
@@ -32,3 +32,7 @@ A newer version updates the existing MongoDB document, preserving its `_id`.
 Same and older versions never create a second entry.
 
 Before deploying over a populated database, take a MongoDB backup. The server backfills normalized fields for legacy records. If duplicate legacy entries already exist, MongoDB may refuse the unique compound index; the API logs a warning and continues with a non-unique index, so clean those duplicate records to restore database-enforced uniqueness.
+
+
+## Website compatibility
+The original `index.html` is retained unchanged. The API keeps `_id` in command responses for the website detail view and supports searching by command name, author, and aliases.
