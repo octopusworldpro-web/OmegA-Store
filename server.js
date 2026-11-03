@@ -5,6 +5,9 @@ const cors = require("cors");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const MONGODB_URI = process.env.MONGODB_URI;
+// Override these on the hosting service when targeting another database/collection.
+const STORE_DB_NAME = String(process.env.STORE_DB_NAME || "omegastore").trim();
+const STORE_COMMANDS_COLLECTION = String(process.env.STORE_COMMANDS_COLLECTION || "commands").trim();
 const ADMIN_UID = String(process.env.STORE_ADMIN_UID || "").trim();
 const ADMIN_SECRET = String(process.env.STORE_ADMIN_SECRET || "").trim();
 
@@ -131,11 +134,15 @@ async function startServer() {
   if (!MONGODB_URI) throw new Error("MONGODB_URI environment variable is missing");
   const client = new MongoClient(MONGODB_URI);
   await client.connect();
-  const db = client.db("omegastore");
-  commands = db.collection("commands");
+  const db = client.db(STORE_DB_NAME);
+  commands = db.collection(STORE_COMMANDS_COLLECTION);
   settings = db.collection("settings");
-  // Backfill normalized keys for records created by the legacy /api/commands endpoint.
-  const legacy = await commands.find({ $or: [{ nameNorm: { $exists: false } }, { authorNorm: { $exists: false } }] }).toArray();
+  // Backfill normalized keys for legacy records (missing, null, or blank values).
+  // This is important before migrating data into a collection with a unique compound index.
+  const legacy = await commands.find({ $or: [
+    { nameNorm: { $exists: false } }, { nameNorm: null }, { nameNorm: "" },
+    { authorNorm: { $exists: false } }, { authorNorm: null }, { authorNorm: "" }
+  ] }).toArray();
   for (const doc of legacy) {
     await commands.updateOne({ _id: doc._id }, { $set: {
       nameNorm: norm(doc.name), authorNorm: norm(doc.author),
