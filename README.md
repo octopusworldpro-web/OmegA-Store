@@ -1,6 +1,6 @@
-# OmegA Store API
-
-OmegA Store API for the GoatBot module.
+# OmegA Store
+by NirZon 👽
+OmegA Store for the GoatBot module.
 
 ## Deploy
 
