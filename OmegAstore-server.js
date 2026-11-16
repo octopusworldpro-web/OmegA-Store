@@ -415,29 +415,49 @@ app.post("/miraistore/upload", async (req, res) => {
     const category = clean(suppliedCategory || info.category);
     const uploader = clean(uploaderID || clientFp);
 
+    // Filename identity is config.name + framework + kind.
+    // Author is metadata and must not create duplicate entries.
     const existing = await Command.findOne({
       nameKey: norm(info.name),
-      authorKey: norm(author),
       framework: "goat",
       kind: norm(kind)
-    });
+    }).sort({ uploadDate: -1, _id: -1 });
 
     if (existing) {
       const comparison = compareVersions(info.version, existing.version);
 
-      if (comparison <= 0) {
-        return res.status(409).json({
-          error: comparison === 0
-            ? "Version already exists"
-            : "Version too low",
+      // Same filename + same version: successful idempotent skip.
+      if (comparison === 0) {
+        return res.status(200).json({
+          ok: true,
+          skipped: true,
+          error: "Already exists",
           id: existing.id,
+          name: existing.name,
           currentVersion: existing.version,
-          message: "Upload a higher version to update this entry."
+          message: "This filename and version are already in OmegA Store."
         });
       }
 
+      // Never replace a newer stored version with an older one.
+      if (comparison < 0) {
+        return res.status(409).json({
+          error: "Version too low",
+          skipped: true,
+          id: existing.id,
+          name: existing.name,
+          currentVersion: existing.version,
+          incomingVersion: info.version,
+          message: "A newer version is already stored. Upload a higher version to update it."
+        });
+      }
+
+      // Higher version: update the same Store entry and preserve its stats.
+      const previousVersion = existing.version;
       existing.rawCode = rawCode;
       existing.version = info.version;
+      existing.author = author;
+      existing.authorKey = norm(author);
       existing.category = category;
       existing.description = info.description;
       existing.uploadDate = new Date();
@@ -450,6 +470,9 @@ app.post("/miraistore/upload", async (req, res) => {
         ok: true,
         updated: true,
         id: existing.id,
+        name: existing.name,
+        previousVersion,
+        version: info.version,
         type: `goat-${kind}`,
         message: "Existing command updated."
       });
