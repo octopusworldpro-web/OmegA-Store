@@ -441,9 +441,12 @@ app.post("/miraistore/upload", async (req, res) => {
 
       // Never replace a newer stored version with an older one.
       if (comparison < 0) {
-        return res.status(409).json({
-          error: "Version too low",
+        // Older uploads are a normal AutoSync skip, not an API failure.
+        // Return 200 so Axios clients can handle this as an idempotent result.
+        return res.status(200).json({
+          ok: true,
           skipped: true,
+          error: "Version too low",
           id: existing.id,
           name: existing.name,
           currentVersion: existing.version,
