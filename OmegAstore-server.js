@@ -150,8 +150,8 @@ function extractCodeInfo(code) {
   }
   const get = (key, fallback) => {
     const escapedKey = key.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
-    const match = config.match(new RegExp("\\b" + escapedKey + "\\s*:\\s*['\\"\`](.*?)['\\"\`]", "s"));
-    return match?.[1]?.trim() || fallback;
+    const match = config.match(new RegExp("\\b" + escapedKey + "\\s*:\\s*(?:" + '"' + '([^"]*)' + '"' + "|" + "'" + "([^']*)" + "'" + "|\\x60([^\\x60]*)\\x60)"));
+    return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim() || fallback;
   };
   return {
     name: get("name", ""),
