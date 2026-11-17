@@ -125,14 +125,34 @@ function publicCommand(cmd) {
 }
 
 function extractCodeInfo(code) {
+  // Read metadata only from the exported config object, not comments or other code.
+  const source = String(code);
+  const configMatch = source.match(/\bconfig\s*[:=]\s*\{/);
+  let config = source;
+  if (configMatch) {
+    const braceStart = configMatch.index + configMatch[0].lastIndexOf("{");
+    let depth = 0, quote = null, escaped = false;
+    for (let i = braceStart; i < source.length; i++) {
+      const ch = source[i];
+      if (quote) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === quote) quote = null;
+        continue;
+      }
+      if (ch === '"' || ch === "'" || ch === "\`") { quote = ch; continue; }
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) { config = source.slice(braceStart, i + 1); break; }
+      }
+    }
+  }
   const get = (key, fallback) => {
-    const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const match = code.match(
-      new RegExp("\\b" + escaped + "\\s*:\\s*[\"'`]([^\"'`]*)[\"'`]")
-    );
-    return match?.[1] || fallback;
+    const escapedKey = key.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
+    const match = config.match(new RegExp("\\b" + escapedKey + "\\s*:\\s*['\\"\`](.*?)['\\"\`]", "s"));
+    return match?.[1]?.trim() || fallback;
   };
-
   return {
     name: get("name", ""),
     author: get("author", get("credits", "Unknown")),
@@ -417,8 +437,12 @@ app.post("/miraistore/upload", async (req, res) => {
 
     // Filename identity is config.name + framework + kind.
     // Author is metadata and must not create duplicate entries.
+    const normalizedName = norm(info.name);
     const existing = await Command.findOne({
-      nameKey: norm(info.name),
+      $or: [
+        { nameKey: normalizedName },
+        { name: new RegExp("^" + escapeRegex(normalizedName) + "$", "i") }
+      ],
       framework: "goat",
       kind: norm(kind)
     }).sort({ uploadDate: -1, _id: -1 });
@@ -457,6 +481,8 @@ app.post("/miraistore/upload", async (req, res) => {
 
       // Higher version: update the same Store entry and preserve its stats.
       const previousVersion = existing.version;
+      existing.name = info.name;
+      existing.nameKey = normalizedName;
       existing.rawCode = rawCode;
       existing.version = info.version;
       existing.author = author;
