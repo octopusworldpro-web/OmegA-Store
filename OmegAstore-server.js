@@ -76,8 +76,8 @@ function isOwner(uid) {
 }
 
 function compareVersions(a, b) {
-  const x = String(a).split(".").map(v => parseInt(v) || 0);
-  const y = String(b).split(".").map(v => parseInt(v) || 0);
+  const x = String(a).trim().replace(/^v/i, "").split(".").map(v => parseInt(v, 10) || 0);
+  const y = String(b).trim().replace(/^v/i, "").split(".").map(v => parseInt(v, 10) || 0);
 
   for (let i = 0; i < Math.max(x.length, y.length); i++) {
     const d = (x[i] || 0) - (y[i] || 0);
