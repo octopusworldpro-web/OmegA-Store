@@ -446,13 +446,24 @@ app.post("/miraistore/upload", async (req, res) => {
     const category = clean(info.category || "Uncategorized");
     const uploader = clean(uploaderID || clientFp);
 
-    // Filename identity is config.name + framework + kind.
-    // Author is metadata and must not create duplicate entries.
+    // File identity is config.name + author + framework + kind.
+    // Different authors may publish commands with the same name independently.
     const normalizedName = norm(info.name);
+    const normalizedAuthor = norm(author);
     const existing = await Command.findOne({
-      $or: [
-        { nameKey: normalizedName },
-        { name: new RegExp("^" + escapeRegex(normalizedName) + "$", "i") }
+      $and: [
+        {
+          $or: [
+            { nameKey: normalizedName },
+            { name: new RegExp("^" + escapeRegex(normalizedName) + "$", "i") }
+          ]
+        },
+        {
+          $or: [
+            { authorKey: normalizedAuthor },
+            { author: new RegExp("^" + escapeRegex(author) + "$", "i") }
+          ]
+        }
       ],
       framework: "goat",
       kind: norm(kind)
