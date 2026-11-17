@@ -125,7 +125,6 @@ function publicCommand(cmd) {
 }
 
 function extractCodeInfo(code) {
-  // Read metadata only from the exported config object, not comments or other code.
   const source = String(code);
   const configMatch = source.match(/\bconfig\s*[:=]\s*\{/);
   let config = source;
@@ -148,17 +147,20 @@ function extractCodeInfo(code) {
       }
     }
   }
-  const get = (key, fallback) => {
+
+  const read = (text, key) => {
     const escapedKey = key.replace(/[.*+?^\${}()|[\]\\]/g, "\\$&");
-    const match = config.match(new RegExp("\\b" + escapedKey + "\\s*:\\s*(?:" + '"' + '([^"]*)' + '"' + "|" + "'" + "([^']*)" + "'" + "|\\x60([^\\x60]*)\\x60)"));
-    return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim() || fallback;
+    const match = text.match(new RegExp("\\b" + escapedKey + "\\s*:\\s*(?:\"" + '([^"]*)' + "\"|'([^']*)'|\\x60([^\\x60]*)\\x60)"));
+    return (match?.[1] ?? match?.[2] ?? match?.[3] ?? "").trim();
   };
+  const get = (key, fallback = "") => read(config, key) || (config !== source ? read(source, key) : "") || fallback;
+
   return {
-    name: get("name", ""),
+    name: get("name"),
     author: get("author", get("credits", "Unknown")),
     version: get("version", "N/A"),
     category: get("category", "Uncategorized"),
-    description: get("shortDescription", "")
+    description: get("shortDescription", get("description", ""))
   };
 }
 
