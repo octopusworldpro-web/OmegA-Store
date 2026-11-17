@@ -125,7 +125,7 @@ function publicCommand(cmd) {
 }
 
 function extractConfigBlock(code) {
-  const source = String(src || "");
+  const source = String(code || "");
   const exportMatch = /module\.exports\s*=\s*\{/.exec(source);
   if (!exportMatch) {
     const directMatch = /module\.exports\.config\s*=\s*\{/.exec(source);
